@@ -15,7 +15,7 @@ A USB TTY, usually something like `/dev/ttyUSBX` where X is a number
 ### `[<baud rate>]` (optional)
 The baud rate to use for communication. Default is 115200.
 
-### `[<newline>] (optional)
+### `[<newline>]` (optional)
 The newline character(s) to use while communicating. Default is LF (\n).
 Allowed values are:
 - `CR` (carriage return `\r`)
