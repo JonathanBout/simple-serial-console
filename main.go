@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -16,6 +17,7 @@ func main() {
 
 	inputPort := ""
 	inputBaudRate := 115200
+	inputNewline := "\n"
 
 	// the first argument has to be the USB/Serial Device
 	if len(args) > 0 {
@@ -31,22 +33,57 @@ func main() {
 		i, err := strconv.Atoi(args[1])
 
 		if err != nil {
-			fmt.Println(err)
+			// if the 2nd parameter is not a valid baudrate,
+			// it could be the newline as baudrate is optional.
+			newline, newline_err := parseNewline(args[1])
+
+			// if not a valid newline, show the baudrate error
+			if newline_err != nil {
+				criticalError("Invalid baud rate")
+			}
+
+			inputNewline = newline
+		} else if i < 0 {
 			criticalError("Invalid baud rate")
+		} else {
+			inputBaudRate = i
+
+			// if it was a valid baudrate and there is a third argument,
+			// try to parse it as a newline.
+			if len(args) > 2 {
+				newline, err := parseNewline(args[2])
+
+				if err != nil {
+					fmt.Println(err)
+					criticalError("Invalid newline character")
+				}
+
+				inputNewline = newline
+			}
 		}
 
-		if i < 0 {
-			criticalError("Invalid baud rate")
-		}
-
-		inputBaudRate = i
 	}
 
-	begin(inputPort, inputBaudRate)
+	begin(inputPort, inputBaudRate, inputNewline)
+}
+
+func parseNewline(arg string) (string, error) {
+	switch arg {
+	case "CR": // carriage-return
+		return "\r", nil
+	case "LF": // line-feed
+		return "\n", nil
+	case "CRLF": // carriage-return line-feed
+		return "\r\n", nil
+	case "LFCR": // line-feed carriage-return
+		return "\n\r", nil
+	default:
+		return "", errors.New("invalid newline")
+	}
 }
 
 // Opens a new connection on the specified port at the specified baud rate
-func begin(portName string, baudRate int) {
+func begin(portName string, baudRate int, newline string) {
 	config := &serial.Config{
 		Baud: baudRate,
 		Name: portName,
@@ -66,7 +103,7 @@ func begin(portName string, baudRate int) {
 	}(port)
 
 	// asynchronously read input
-	go userInput(port)
+	go userInput(port, newline)
 
 	// while also receiving data from the serial device
 	buf := make([]byte, 1024)
@@ -84,7 +121,7 @@ func begin(portName string, baudRate int) {
 
 // reads the standard input until the next EOF,
 // or until the input line equals "exit"
-func userInput(port *serial.Port) {
+func userInput(port *serial.Port, newline string) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		input, err := reader.ReadString('\n')
@@ -104,8 +141,8 @@ func userInput(port *serial.Port) {
 		input = strings.TrimSpace(input)
 
 		// write the input data to the port,
-		// after appending a newline character to it
-		_, err = port.Write([]byte(input + "\n"))
+		// after appending the defined newline character to it
+		_, err = port.Write([]byte(input + newline))
 
 		if err != nil {
 			criticalError("Error writing to serial port: " + err.Error())
